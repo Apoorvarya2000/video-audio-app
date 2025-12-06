@@ -1,37 +1,6 @@
-🎬 Video-to-Audio Microservices App on Kubernetes (Minikube + AWS S3)
+🎬 Video-to-Audio Microservices App (Docker + Kubernetes + AWS S3)
 
-A production-style DevOps project built using Python microservices, Docker, Kubernetes (Minikube), AWS S3, and WSL Ubuntu.
-This project takes a video file, extracts its audio using FFmpeg, and uploads the audio file to Amazon S3.
-
-🚀 Project Architecture
-User → Video Service → Shared Volume → Audio Service → S3 Bucket
-
-Components
-Component	Tech	Description
-Video Service	Python + Flask	Accepts video upload and stores it in shared directory
-Audio Service	Python + Flask + FFmpeg	Extracts audio and uploads MP3 to S3
-Storage	Kubernetes PVC	Used for sharing files between services
-Docker	Containerization	Builds microservice images
-Kubernetes	Deployments + Services	Runs and exposes microservices
-AWS S3	Cloud Storage	Stores the extracted audio
-WSL + Minikube	Local Kubernetes Cluster	Development/testing environment
-🛠️ Tech Stack
-
-Python (Flask)
-
-FFmpeg
-
-Docker
-
-Kubernetes (Minikube)
-
-AWS S3
-
-WSL Ubuntu
-
-NodePort / Minikube Service
-
-PVC + PV (Kubernetes)
+Convert any uploaded video file into MP3 audio using a fully containerized microservices architecture deployed on Kubernetes (Minikube) and storing output on AWS S3.
 
 📁 Project Structure
 video-audio-app/
@@ -55,50 +24,149 @@ video-audio-app/
 │
 └── README.md
 
-🔧 How to Run Locally (Complete Steps)
-1. Start Minikube
+🚀 Architecture Overview
+🧩 Microservices
+Service	Purpose
+video-service	Accepts video upload → saves it → calls audio-service
+audio-service	Extracts MP3 using FFmpeg → uploads to S3
+🔗 Communication
+Client → video-service → audio-service → AWS S3
+
+📦 Storage
+
+Shared Persistent Volume (PV + PVC) between both services
+
+Used to share uploaded video files
+
+☁️ Cloud
+
+Output MP3 uploaded to AWS S3 Bucket
+
+🛠️ Tech Stack
+Component	Technology
+Backend	Python + Flask
+Audio Extraction	FFmpeg
+Containers	Docker
+Orchestration	Kubernetes (Minikube)
+Cloud Storage	AWS S3
+OS	WSL Ubuntu
+🔧 How to Run Locally
+1️⃣ Start Minikube
 minikube start --driver=docker
 
-2. Enable Docker inside Minikube
+2️⃣ Build Docker images inside Minikube
 eval $(minikube docker-env)
 
-3. Build Docker images
-docker build -t video-service:1.0 ./video-service
-docker build -t audio-service:1.0 ./audio-service
+cd video-service
+docker build -t video-service:1.0 .
 
-4. Apply Kubernetes manifests
-kubectl apply -f k8s/shared-storage.yaml
-kubectl apply -f k8s/video-deployment.yaml
-kubectl apply -f k8s/audio-deployment.yaml
-kubectl apply -f k8s/video-service.yaml
-kubectl apply -f k8s/audio-service.yaml
+cd ../audio-service
+docker build -t audio-service:1.0 .
 
-5. Provide AWS Credentials
+3️⃣ Apply Kubernetes manifests
+cd ~/video-audio-app/k8s
+kubectl apply -f shared-storage.yaml
+kubectl apply -f video-deployment.yaml
+kubectl apply -f audio-deployment.yaml
+kubectl apply -f video-service.yaml
+kubectl apply -f audio-service.yaml
+
+
+Check pods:
+
+kubectl get pods
+
+🌩️ AWS S3 Setup
+
+Create bucket:
+
+aws s3 mb s3://my-video-audio-bucket --region ap-south-1
+
+
+Create secret:
+
 kubectl create secret generic aws-secret \
-  --from-literal=AWS_ACCESS_KEY_ID=XXXX \
-  --from-literal=AWS_SECRET_ACCESS_KEY=YYYY
+  --from-literal=AWS_ACCESS_KEY_ID=xxxxx \
+  --from-literal=AWS_SECRET_ACCESS_KEY=yyyyy
 
-6. Expose Video Service
+
+Link secret to audio-service:
+
+kubectl set env deployment/audio-deployment --from=secret/aws-secret
+
+
+Restart:
+
+kubectl rollout restart deployment audio-deployment
+
+🎯 Using the App
+
+Get the URL of video-service:
+
 minikube service video-service --url
 
-7. Upload a Video File
-curl -X POST <URL_FROM_MINIKUBE> \
-  -F "file=@/path/to/video.mp4"
+
+Example (your output may differ):
+
+http://127.0.0.1:36891
 
 
-Response Example:
+Upload a video:
+
+curl -X POST http://127.0.0.1:36891/upload \
+  -F "file=@/mnt/c/Users/apurv/Videos/Captures/sample.mp4.mp4"
+
+
+Sample Response:
 
 {
-  "video_path": "/data/videos/sample.mp4",
   "audio_response": {
     "local_path": "/data/audio/sample.mp3",
-    "s3_url": "https://my-bucket.s3.amazonaws.com/..."
-  }
+    "s3_url": "https://my-video-audio-bucket.s3.amazonaws.com/audio/.../sample.mp3"
+  },
+  "video_path": "/data/videos/sample.mp4"
 }
 
-🎧 Output
+📤 Public S3 Access (Optional)
 
-✔ Audio extracted using FFmpeg
-✔ MP3 saved in PVC shared storage
-✔ File uploaded to AWS S3
-✔ Public URL returned to the user
+To allow public audio download:
+
+Open AWS S3 Console
+
+Select your bucket → Permissions
+
+Add Bucket Policy:
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::my-video-audio-bucket/*"
+    }
+  ]
+}
+
+👨‍💻 What I Learned (Interview Summary)
+
+✔ Dockerizing Python microservices
+✔ Sharing PV/PVC between services
+✔ Exposing services using NodePort
+✔ Using Minikube's internal Docker daemon
+✔ Calling microservices from each other
+✔ Using FFmpeg to process media
+✔ Using AWS S3 for cloud storage
+✔ Debugging pods using logs & rollout restart
+
+📎 Useful Commands
+View logs
+kubectl logs <pod-name>
+
+Restart deployments
+kubectl rollout restart deployment <name>
+
+Delete all (cleanup)
+kubectl delete all --all
