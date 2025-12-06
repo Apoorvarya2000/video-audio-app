@@ -2,6 +2,7 @@
 
 Convert any uploaded video file into MP3 audio using a fully containerized microservices architecture deployed on Kubernetes (Minikube) and storing output on AWS S3.
 
+📁 Project Structure
 video-audio-app/
 │
 ├── video-service/
@@ -22,7 +23,6 @@ video-audio-app/
 │   └── shared-storage.yaml
 │
 └── README.md
-
 
 🚀 Architecture Overview
 🧩 Microservices
